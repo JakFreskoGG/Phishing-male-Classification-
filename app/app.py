@@ -97,17 +97,18 @@ def predict():
     prediction = model.predict(X)[0]
     probability = model.predict_proba(X)[0][1]
     
-    if model_name == "xgboost" and prediction == 0:
-        probability = 1 - probability
-    
-    if model_name == "logistic":
+    if model_name == "xgboost":
         if prediction == 0:
             probability = 1 - probability
-            label = "Phishing"
-        else:
             label = "Legitimate"
+        else:
+            label = "Phishing"
     else:
-        label = "Phishing" if prediction == 0 else "Legitimate"
+        if prediction == 0:
+            probability = 1 - probability
+            label = "Legitimate"
+        else:
+            label = "Phishing"
     
     print(f"Debug - Model: {model_name}, Prediction: {prediction}, Prob: {probability}")
     
