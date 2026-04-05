@@ -1,0 +1,52 @@
+project:
+  name: "Phishing Email Detection"
+  version: "1.0.0"
+
+paths:
+  data:
+    raw: "data/raw"
+    processed: "data/processed"
+    features: "data/features"
+  models: "models"
+  logs: "logs"
+
+data:
+  filename: "CEAS_08.csv"
+  test_size: 0.2
+  random_state: 42
+
+features:
+  text:
+    max_features: 5000
+    ngram_range: [1, 2]
+    min_df: 2
+    max_df: 0.95
+  url:
+    extract_domain: true
+    count_urls: true
+    check_suspicious_tlds: true
+  sender:
+    extract_domain: true
+    check_free_email_providers: true
+
+models:
+  xgboost:
+    n_estimators: 100
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+  catboost:
+    iterations: 100
+    depth: 6
+    learning_rate: 0.1
+
+preprocessing:
+  stopwords_lang: "english"
+  lemmatize: true
+  remove_urls: false
+
+app:
+  host: "0.0.0.0"
+  port: 8000
+  debug: true

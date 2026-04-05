@@ -1,0 +1,16 @@
+pandas
+numpy
+scikit-learn
+xgboost
+nltk
+spacy
+beautifulsoup4
+lxml
+flask
+fastapi
+uvicorn
+joblib
+pyyaml
+matplotlib
+seaborn
+wordcloud

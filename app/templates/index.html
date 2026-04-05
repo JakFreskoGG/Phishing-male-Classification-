@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phishing Email Detector</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 150px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .result.phishing {
+            background: #fee;
+            border: 2px solid #f55;
+        }
+        
+        .result.legitimate {
+            background: #efe;
+            border: 2px solid #5f5;
+        }
+        
+        .result-header {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .result.phishing .result-header {
+            color: #c00;
+        }
+        
+        .result.legitimate .result-header {
+            color: #080;
+        }
+        
+        .probability {
+            color: #555;
+        }
+        
+        .loader {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .loader::after {
+            content: "Проверка...";
+            animation: dots 1.5s infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: "Проверка."; }
+            40% { content: "Проверка.."; }
+            60%, 100% { content: "Проверка..."; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Phishing Detector</h1>
+        <p class="subtitle">Определение фишинговых писем с помощью ML</p>
+        
+        <div class="form-group">
+            <label for="sender">Отправитель:</label>
+            <input type="text" id="sender" placeholder="Например: support@bank.com">
+        </div>
+        
+        <div class="form-group">
+            <label for="subject">Тема письма:</label>
+            <input type="text" id="subject" placeholder="Тема письма">
+        </div>
+        
+        <div class="form-group">
+            <label for="body">Текст письма:</label>
+            <textarea id="body" placeholder="Содержание письма..."></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="model">Модель:</label>
+            <select id="model" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 14px;">
+                <option value="xgboost">XGBoost</option>
+                <option value="logistic">Logistic Regression</option>
+            </select>
+        </div>
+        
+        <button onclick="checkEmail()">Проверить письмо</button>
+        
+        <div class="loader" id="loader"></div>
+        
+        <div class="result" id="result">
+            <div class="result-header" id="result-header"></div>
+            <div class="probability" id="probability"></div>
+        </div>
+    </div>
+    
+    <script>
+        async function checkEmail() {
+            const sender = document.getElementById('sender').value;
+            const subject = document.getElementById('subject').value;
+            const body = document.getElementById('body').value;
+            const model = document.getElementById('model').value;
+            
+            if (!body && !subject) {
+                alert('Пожалуйста, введите текст письма');
+                return;
+            }
+            
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('result').style.display = 'none';
+            
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sender, subject, body, model })
+                });
+                
+                const data = await response.json();
+                
+                document.getElementById('loader').style.display = 'none';
+                
+                const resultDiv = document.getElementById('result');
+                resultDiv.className = 'result ' + (data.label === 'Phishing' ? 'phishing' : 'legitimate');
+                resultDiv.style.display = 'block';
+                
+                document.getElementById('result-header').textContent = data.label === 'Phishing' 
+                    ? '⚠️ Фишинговое письмо!' 
+                    : '✓ Легитимное письмо';
+                
+                document.getElementById('probability').textContent = 
+                    `Вероятность: ${(data.probability * 100).toFixed(1)}% (модель: ${data.model})`;
+                
+            } catch (error) {
+                document.getElementById('loader').style.display = 'none';
+                alert('Ошибка при проверке. Убедитесь, что модель обучена.');
+            }
+        }
+    </script>
+</body>
+</html>
