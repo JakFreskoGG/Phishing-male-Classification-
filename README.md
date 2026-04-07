@@ -31,7 +31,6 @@ phishing-detection/
 │   ├── app.py
 │   └── templates/
 ├── tests/                      # Тесты
-├── config.yaml                 # Конфигурация
 └── requirements.txt            # Зависимости
 ```
 
