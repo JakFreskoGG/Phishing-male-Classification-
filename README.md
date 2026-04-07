@@ -76,7 +76,7 @@ python app/app.py
 
 - **XGBoost** — градиентный бустинг (основная модель)
 - **Logistic Regression** — линейная модель для сравнения
-- **Ensemble** — soft voting ансамбль из Logistic Regression, Gradient Boosting и Random Forest
+- **Ensemble** — Ансамбль из LR, RF, GB
 
 ## Результаты
 
