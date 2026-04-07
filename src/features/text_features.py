@@ -4,11 +4,11 @@ from collections import Counter
 
 URGENCY_WORDS = [
     "urgent", "immediately", "now", "act now", "limited time",
-    "expire", "deadline", "today", "hurry", "instant", "ASAP"
+    "expire", "deadline", "today", "hurry", "instant", "asap"
 ]
 
 THREAT_WORDS = [
-    "suspended", "blocked", "account", "unauthorized", "compromised",
+    "suspended", "blocked", "unauthorized", "compromised",
     "security", "alert", "warning", "fraud", "illegal", "law enforcement"
 ]
 
@@ -23,19 +23,27 @@ GREETING_PATTERNS = [
 ]
 
 
-def count_urgency_words(text: str) -> int:
+def count_keyword_matches(text: str, keywords: list) -> int:
     text = text.lower()
-    return sum(1 for word in URGENCY_WORDS if word in text)
+    count = 0
+    for keyword in sorted(keywords, key=len, reverse=True):
+        pattern = r"\b" + re.escape(keyword.lower()) + r"\b"
+        matches = re.findall(pattern, text)
+        count += len(matches)
+        text = re.sub(pattern, " ", text)
+    return count
+
+
+def count_urgency_words(text: str) -> int:
+    return count_keyword_matches(text, URGENCY_WORDS)
 
 
 def count_threat_words(text: str) -> int:
-    text = text.lower()
-    return sum(1 for word in THREAT_WORDS if word in text)
+    return count_keyword_matches(text, THREAT_WORDS)
 
 
 def count_reward_words(text: str) -> int:
-    text = text.lower()
-    return sum(1 for word in REWARD_WORDS if word in text)
+    return count_keyword_matches(text, REWARD_WORDS)
 
 
 def has_generic_greeting(text: str) -> int:

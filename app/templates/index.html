@@ -150,7 +150,7 @@
 <body>
     <div class="container">
         <h1>🔍 Phishing Detector</h1>
-        <p class="subtitle">Определение фишинговых писем с помощью ML</p>
+        <p class="subtitle">Определение фишинговых писем</p>
         
         <div class="form-group">
             <label for="sender">Отправитель:</label>
@@ -172,6 +172,7 @@
             <select id="model" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 14px;">
                 <option value="xgboost">XGBoost</option>
                 <option value="logistic">Logistic Regression</option>
+                <option value="ensemble">Ensemble (LR + GB + RF)</option>
             </select>
         </div>
         

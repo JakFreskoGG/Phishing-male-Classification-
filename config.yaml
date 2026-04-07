@@ -4,9 +4,9 @@ project:
 
 paths:
   data:
-    raw: "data/raw"
-    processed: "data/processed"
-    features: "data/features"
+    raw: "raw_data"
+    processed: "processed_data"
+    features: "features_data"
   models: "models"
   logs: "logs"
 
@@ -40,6 +40,24 @@ models:
     iterations: 100
     depth: 6
     learning_rate: 0.1
+  ensemble:
+    voting: "soft"
+    n_jobs: null
+    weights: null
+    logistic_regression:
+      max_iter: 3000
+      C: 1.0
+      solver: "lbfgs"
+      n_jobs: 1
+    gradient_boosting:
+      n_estimators: 100
+      learning_rate: 0.1
+      max_depth: 3
+    random_forest:
+      n_estimators: 200
+      max_depth: null
+      min_samples_split: 2
+      n_jobs: -1
 
 preprocessing:
   stopwords_lang: "english"
@@ -49,4 +67,4 @@ preprocessing:
 app:
   host: "0.0.0.0"
   port: 8000
-  debug: true
+  debug: false

@@ -1,62 +1,36 @@
 from flask import Flask, request, jsonify, render_template
 import joblib
+import os
 import pandas as pd
-import re
+import sys
+import yaml
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
+
+from src.features.feature_builder import build_features
 
 app = Flask(__name__)
 
-config = {
-    "app": {"host": "0.0.0.0", "port": 8000, "debug": True}
-}
+with open(os.path.join(BASE_DIR, "config.yaml"), "r", encoding="utf-8") as f:
+    config = yaml.safe_load(f)
 
 models = {}
 vectorizers = {}
 
-FREE_EMAIL_DOMAINS = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "mail.ru", "yandex.ru"]
-URGENCY_WORDS = ["urgent", "immediately", "now", "act now", "limited time", "expire", "deadline", "today", "hurry", "instant", "asap"]
-THREAT_WORDS = ["suspended", "blocked", "account", "unauthorized", "security", "alert", "warning", "fraud", "illegal"]
-REWARD_WORDS = ["won", "prize", "gift", "free", "bonus", "congratulations", "winner", "reward", "claim", "receive"]
 
-
-def extract_urls(text: str) -> list:
-    return re.findall(r"http\S+|www\.\S+", text)
-
-
-def extract_features(sender: str, subject: str, body: str) -> dict:
-    text = f"{subject} {body}"
-    
-    domain = re.search(r"@([\w.-]+)", sender or "")
-    domain = domain.group(1) if domain else ""
-    
-    urls = extract_urls(text)
-    
-    features = {
-        "is_free_email": 1 if domain.lower() in FREE_EMAIL_DOMAINS else 0,
-        "domain_length": len(domain),
-        "has_numbers_in_domain": int(bool(re.search(r"\d", domain))),
-        "url_count": len(urls),
-        "avg_url_length": sum(len(u) for u in urls) / len(urls) if urls else 0,
-        "max_url_length": max(len(u) for u in urls) if urls else 0,
-        "min_url_length": min(len(u) for u in urls) if urls else 0,
-        "has_suspicious_tld": int(any(u.endswith(tld) for u in urls for tld in [".xyz", ".top", ".click", ".work"])),
-        "has_ip_url": int(bool(re.search(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", text))),
-        "avg_special_chars": sum(sum(1 for c in u if c in "@#$%^&*()_+-=[]{}|;':\",./<>?") for u in urls) / len(urls) if urls else 0,
-        "urgency_word_count": sum(1 for w in URGENCY_WORDS if w in text.lower()),
-        "threat_word_count": sum(1 for w in THREAT_WORDS if w in text.lower()),
-        "reward_word_count": sum(1 for w in REWARD_WORDS if w in text.lower()),
-        "has_generic_greeting": int(any(p in text.lower() for p in ["dear user", "dear customer", "dear member", "valued customer"])),
-        "capital_count": sum(1 for c in text if c.isupper()),
-        "exclamation_count": text.count("!"),
-        "question_mark_count": text.count("?"),
-        "text_length": len(text),
-        "word_count": len(text.split()),
-        "avg_word_length": sum(len(w) for w in text.split()) / len(text.split()) if text.split() else 0,
-        "has_attachment": int(bool(re.search(r"\.(exe|scr|bat|cmd|com|pif|msi|jar|js|vbs|zip|rar|7z|tar|gz)", text.lower()))),
-        "has_suspicious_attachment": int(bool(re.search(r"\.(exe|scr|bat|cmd|com|jar|js|vbs)", text.lower()))),
-        "attachment_count": len(re.findall(r"\.(exe|scr|bat|cmd|com|pif|msi|jar|js|vbs|zip|rar|7z|tar|gz)", text.lower())),
-        "has_macros_keywords": int(any(k in text.lower() for k in ["macro", "enable content", "enable macros", "vba", "script"])),
-    }
-    return features
+def make_model_compatible(model):
+    if model.__class__.__name__ == "LogisticRegression" and not hasattr(model, "multi_class"):
+        model.multi_class = "deprecated"
+    if hasattr(model, "n_jobs"):
+        model.n_jobs = 1
+    for estimator in getattr(model, "estimators_", []):
+        if hasattr(estimator, "n_jobs"):
+            estimator.n_jobs = 1
+        for _, step in getattr(estimator, "steps", []):
+            if hasattr(step, "n_jobs"):
+                step.n_jobs = 1
+    return model
 
 
 @app.route("/")
@@ -66,7 +40,7 @@ def index():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     
     sender = data.get("sender", "")
     subject = data.get("subject", "")
@@ -79,18 +53,24 @@ def predict():
     if model is None or vectorizer is None:
         return jsonify({"error": f"Model {model_name} not found"}), 404
     
-    features = extract_features(sender, subject, body)
+    features = build_features(sender, subject, body)
     
     text = subject + " " + body
     tfidf_matrix = vectorizer.transform([text])
     tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=[f"tfidf_{i}" for i in range(tfidf_matrix.shape[1])])
     
     X = pd.concat([pd.DataFrame([features]), tfidf_df], axis=1)
-    
-    if model_name == "xgboost":
+
+    if hasattr(model, "feature_names_in_"):
+        feature_names = list(model.feature_names_in_)
+    elif model_name == "xgboost":
         feature_names = model.get_booster().feature_names
-        for col in X.columns:
-            if col not in feature_names:
+    else:
+        feature_names = None
+
+    if feature_names:
+        for col in feature_names:
+            if col not in X.columns:
                 X[col] = 0
         X = X[feature_names]
     
@@ -110,8 +90,6 @@ def predict():
         else:
             label = "Phishing"
     
-    print(f"Debug - Model: {model_name}, Prediction: {prediction}, Prob: {probability}")
-    
     return jsonify({
         "prediction": int(prediction),
         "probability": float(probability),
@@ -122,15 +100,19 @@ def predict():
 
 def load_models():
     global models, vectorizers
-    import os
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    model_path = os.path.join(base_dir, "models")
+    model_path = os.path.join(BASE_DIR, config["paths"]["models"])
     
-    models["xgboost"] = joblib.load(os.path.join(model_path, "xgboost_model.pkl"))
+    models["xgboost"] = make_model_compatible(joblib.load(os.path.join(model_path, "xgboost_model.pkl")))
     vectorizers["xgboost"] = joblib.load(os.path.join(model_path, "vectorizer.pkl"))
     
-    models["logistic"] = joblib.load(os.path.join(model_path, "logistic_model.pkl"))
+    models["logistic"] = make_model_compatible(joblib.load(os.path.join(model_path, "logistic_model.pkl")))
     vectorizers["logistic"] = joblib.load(os.path.join(model_path, "logistic_vectorizer.pkl"))
+
+    ensemble_model_path = os.path.join(model_path, "ensemble_model.pkl")
+    ensemble_vectorizer_path = os.path.join(model_path, "ensemble_vectorizer.pkl")
+    if os.path.exists(ensemble_model_path) and os.path.exists(ensemble_vectorizer_path):
+        models["ensemble"] = make_model_compatible(joblib.load(ensemble_model_path))
+        vectorizers["ensemble"] = joblib.load(ensemble_vectorizer_path)
 
 
 if __name__ == "__main__":

@@ -5,20 +5,24 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import pandas as pd
 import numpy as np
 import joblib
+import yaml
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from xgboost import XGBClassifier
+from src.features.feature_builder import build_features_frame
 from src.utils.evaluation import evaluate_model, print_metrics
 
 
 def load_config():
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return {
-        "paths": {"data": {"raw": os.path.join(project_root, "raw_data")}, "models": os.path.join(project_root, "models")},
-        "data": {"filename": "CEAS_08.csv", "test_size": 0.2, "random_state": 42},
-        "features": {"text": {"max_features": 5000, "ngram_range": [1, 2], "min_df": 2, "max_df": 0.95}},
-        "models": {"xgboost": {"n_estimators": 100, "max_depth": 6, "learning_rate": 0.1, "subsample": 0.8, "colsample_bytree": 0.8}}
-    }
+    config_path = os.path.join(project_root, "config.yaml")
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    config["project_root"] = project_root
+    config["paths"]["data"]["raw"] = os.path.join(project_root, config["paths"]["data"]["raw"])
+    config["paths"]["models"] = os.path.join(project_root, config["paths"]["models"])
+    return config
 
 
 def load_data(filepath: str) -> pd.DataFrame:
@@ -29,27 +33,7 @@ def load_data(filepath: str) -> pd.DataFrame:
 
 
 def extract_features(df: pd.DataFrame) -> pd.DataFrame:
-    from src.features.sender_features import sender_features
-    from src.features.url_features import url_features
-    from src.features.text_features import text_features
-    from src.features.attachment_features import attachment_features
-
-    feature_list = []
-    for idx, row in df.iterrows():
-        sender = row.get("sender", "")
-        body = row.get("body", "")
-        subject = row.get("subject", "")
-        
-        text = f"{subject} {body}"
-        
-        feats = {}
-        feats.update(sender_features(sender))
-        feats.update(url_features(text))
-        feats.update(text_features(text))
-        feats.update(attachment_features(text))
-        feature_list.append(feats)
-    
-    return pd.DataFrame(feature_list)
+    return build_features_frame(df)
 
 
 def main():
@@ -63,12 +47,19 @@ def main():
     print(f"Loaded {len(df)} emails")
     print(f"Class distribution:\n{df['label'].value_counts()}")
     
-    features_df = extract_features(df)
-    features_df = features_df.drop(columns=["sender_domain"], errors="ignore")
-    features_df = features_df.astype(float)
-    print(f"Extracted {len(features_df.columns)} features")
-    
     text_data = df["subject"].fillna("") + " " + df["body"].fillna("")
+    y = df["label"].values
+
+    df_train, df_test, text_train, text_test, y_train, y_test = train_test_split(
+        df, text_data, y,
+        test_size=config["data"]["test_size"],
+        random_state=config["data"]["random_state"],
+        stratify=y
+    )
+
+    features_train = extract_features(df_train).reset_index(drop=True)
+    features_test = extract_features(df_test).reset_index(drop=True)
+    print(f"Extracted {len(features_train.columns)} features")
     
     tfidf_config = config["features"]["text"]
     vectorizer = TfidfVectorizer(
@@ -77,15 +68,14 @@ def main():
         min_df=tfidf_config["min_df"],
         max_df=tfidf_config["max_df"]
     )
-    tfidf_matrix = vectorizer.fit_transform(text_data)
-    tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=[f"tfidf_{i}" for i in range(tfidf_matrix.shape[1])])
-    
-    X = pd.concat([features_df.reset_index(drop=True), tfidf_df.reset_index(drop=True)], axis=1)
-    y = df["label"].values
-    
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=config["data"]["test_size"], random_state=config["data"]["random_state"]
-    )
+    tfidf_train = vectorizer.fit_transform(text_train)
+    tfidf_test = vectorizer.transform(text_test)
+
+    tfidf_train_df = pd.DataFrame(tfidf_train.toarray(), columns=[f"tfidf_{i}" for i in range(tfidf_train.shape[1])])
+    tfidf_test_df = pd.DataFrame(tfidf_test.toarray(), columns=[f"tfidf_{i}" for i in range(tfidf_test.shape[1])])
+
+    X_train = pd.concat([features_train, tfidf_train_df], axis=1)
+    X_test = pd.concat([features_test, tfidf_test_df], axis=1)
     
     xgb_config = config["models"]["xgboost"]
     model = XGBClassifier(
@@ -108,6 +98,7 @@ def main():
     print_metrics(metrics)
     
     model_path = config["paths"]["models"]
+    os.makedirs(model_path, exist_ok=True)
     joblib.dump(model, f"{model_path}/xgboost_model.pkl")
     joblib.dump(vectorizer, f"{model_path}/vectorizer.pkl")
     print(f"\nModel saved to {model_path}/xgboost_model.pkl")

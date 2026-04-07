@@ -4,7 +4,7 @@ from src.features.sender_features import SUSPICIOUS_TLDS
 
 
 def extract_urls(text: str) -> list:
-    url_pattern = re.compile(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+")
+    url_pattern = re.compile(r"(?:https?://|www\.)(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+")
     return url_pattern.findall(text)
 
 

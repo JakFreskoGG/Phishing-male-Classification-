@@ -6,10 +6,9 @@ ML-система для определения фишинговых писем 
 
 ```
 phishing-detection/
-├── data/                       # Данные
-│   ├── raw/                    # Исходные датасеты
-│   ├── processed/              # Очищенные данные
-│   └── features/               # Извлечённые признаки
+├── raw_data/                   # Исходные датасеты
+├── processed_data/             # Очищенные данные
+├── features_data/              # Извлечённые признаки из ноутбуков
 ├── notebooks/                  # Jupyter Notebooks
 │   ├── 01_eda.ipynb            # EDA анализ
 │   ├── 02_feature_engineering.ipynb # Извлечение признаков
@@ -23,6 +22,7 @@ phishing-detection/
 │   ├── models/                 # Обучение моделей
 │   │   ├── train_xgboost.py
 │   │   └── train_logistic_regression.py
+│   │   └── train_ensemble.py
 │   └── utils/                  # Утилиты
 │       ├── preprocessing.py
 │       └── evaluation.py
@@ -55,6 +55,7 @@ pip install -r requirements.txt
 ```bash
 python src/models/train_xgboost.py
 python src/models/train_logistic_regression.py
+python src/models/train_ensemble.py
 ```
 
 ### 3. Запуск веб-приложения
@@ -75,6 +76,7 @@ python app/app.py
 
 - **XGBoost** — градиентный бустинг (основная модель)
 - **Logistic Regression** — линейная модель для сравнения
+- **Ensemble** — soft voting ансамбль из Logistic Regression, Gradient Boosting и Random Forest
 
 ## Результаты
 
